@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>E2EE Secure Chat</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #e5ddd5; display: flex; justify-content: center; padding: 20px; margin: 0; }
+        #app { background: white; padding: 20px; border-radius: 8px; width: 450px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); height: 90vh; display: flex; flex-direction: column; }
+        
+        /* Auth Area */
+        #auth-area { display: flex; flex-direction: column; gap: 10px; }
+        
+        /* Chat Area */
+        #chat-area { display: none; flex-direction: column; height: 100%; }
+        #messages { flex-grow: 1; overflow-y: auto; border: 1px solid #eee; margin: 10px 0; padding: 10px; background: #f9f9f9; border-radius: 5px; }
+        
+        /* Inputs */
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .input-group { display: flex; gap: 5px; margin-top: 5px; }
+        
+        button { padding: 10px; background: #075e54; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #128c7e; }
+        
+        .msg { margin-bottom: 10px; padding: 8px; border-radius: 8px; max-width: 80%; word-wrap: break-word; }
+        .me { background: #dcf8c6; align-self: flex-end; margin-left: auto; }
+        .other { background: #fff; border: 1px solid #eee; }
+        
+        #current-chat-partner { font-weight: bold; color: #075e54; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="auth-area">
+            <h2 id="title">Login</h2>
+            <input type="text" id="user" placeholder="Username">
+            <input type="password" id="pass" placeholder="Passwort">
+            <input type="password" id="chat-pass" placeholder="Chat-Key (E2EE)">
+            <button onclick="auth('login')" id="login-btn">Einloggen</button>
+            <p onclick="toggleMode()" style="cursor:pointer; font-size: 12px; color: #075e54; text-align: center;">Noch kein Konto? Registrieren</p>
+        </div>
+
+        <div id="chat-area">
+            <div id="current-chat-partner">Chatten mit: <span id="display-target">Niemandem</span></div>
+            <input type="text" id="target" placeholder="Empfänger Username eingeben..." oninput="updateTargetDisplay()">
+            
+            <div id="messages"></div>
+            
+            <form id="msg-form" onsubmit="event.preventDefault(); send();">
+                <div class="input-group">
+                    <input type="text" id="msg" placeholder="Nachricht schreiben..." style="flex: 1;" autocomplete="off">
+                    <button type="submit">Senden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket, chatKey, isLogin = true;
+
+        function toggleMode() {
+            isLogin = !isLogin;
+            document.getElementById('title').innerText = isLogin ? "Login" : "Registrieren";
+            document.getElementById('login-btn').innerText = isLogin ? "Einloggen" : "Registrieren";
+        }
+
+        function updateTargetDisplay() {
+            const val = document.getElementById('target').value;
+            document.getElementById('display-target').innerText = val || "Niemandem";
+        }
+
+        async function deriveKey(pass) {
+            const enc = new TextEncoder();
+            const baseKey = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+            return crypto.subtle.deriveKey({name: "PBKDF2", salt: enc.encode("festes-salz"), iterations: 100000, 
+                hash: "SHA-256"}, baseKey, {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]);
+        }
+
+        async function auth() {
+            const u = document.getElementById('user').value;
+            const p = document.getElementById('pass').value;
+            const cp = document.getElementById('chat-pass').value;
+            const url = isLogin ? '/api/login' : '/api/register';
+
+            try {
+                const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, password:p})});
+                if (!res.ok) throw new Error("Fehler beim Server");
+
+                if (isLogin) {
+                    const { token } = await res.json();
+                    chatKey = await deriveKey(cp);
+                    startSocket(token, u);
+                } else { 
+                    alert("Erfolgreich registriert! Bitte logge dich ein."); 
+                    toggleMode(); 
+                }
+            } catch(e) { alert(e.message); }
+        }
+
+        function startSocket(token, u) {
+            socket = io({ auth: { token } });
+            document.getElementById('auth-area').style.display = 'none';
+            document.getElementById('chat-area').style.display = 'flex';
+            document.getElementById('msg').focus(); // Fokus direkt auf das Textfeld
+
+            socket.on('receive-message', async (data) => {
+                try {
+                    const iv = new Uint8Array(atob(data.content.iv).split("").map(c => c.charCodeAt(0)));
+                    const ct = new Uint8Array(atob(data.content.ct).split("").map(c => c.charCodeAt(0)));
+                    const dec = await crypto.subtle.decrypt({name: "AES-GCM", iv}, chatKey, ct);
+                    showMsg(data.fromUserId, new TextDecoder().decode(dec), 'other');
+                } catch(e) { showMsg(data.fromUserId, "[Verschlüsselte Nachricht - Key falsch?]", 'other'); }
+            });
+        }
+
+        async function send() {
+            const t = document.getElementById('target').value;
+            const mField = document.getElementById('msg');
+            const m = mField.value;
+            
+            if (!t || !m) return;
+
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const enc = await crypto.subtle.encrypt({name: "AES-GCM", iv}, chatKey, new TextEncoder().encode(m));
+            
+            socket.emit('send-message', { toUserId: t, encryptedContent: {
+                ct: btoa(String.fromCharCode(...new Uint8Array(enc))),
+                iv: btoa(String.fromCharCode(...iv))
+            }});
+            
+            showMsg("Ich", m, 'me');
+            
+            mField.value = ""; // Feld leeren
+            mField.focus();    // Fokus zurücksetzen
+        }
+
+        function showMsg(s, m, type) {
+            const d = document.createElement('div');
+            d.className = `msg ${type}`;
+            d.innerHTML = `<strong>${s}:</strong><br>${m}`;
+            const box = document.getElementById('messages');
+            box.appendChild(d);
+            box.scrollTop = box.scrollHeight; // Auto-Scroll nach unten
+        }
+    </script>
+</body>
+</html>
