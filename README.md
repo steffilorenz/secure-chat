@@ -14,8 +14,8 @@ A simple real-time chat demonstrating End-to-End Encryption (E2EE).
 1. Clone the repository:
 
    ```
-   git clone https://github.com/your-username/secure-crypto-chat.git
-   cd secure-crypto-chat
+   git clone https://github.com/your-username/secure-chat.git
+   cd secure-chat
    ```
 
 2. Install dependencies:
