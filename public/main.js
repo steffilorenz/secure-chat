@@ -111,10 +111,15 @@ async function handleAuth() {
         if (response.ok && isLoginMode) {
             const { token } = await response.json();
             
-            // 1. generate chat key from password
+            // generate chat key from password
             chatKey = await deriveKey(chatPassword);
+
+            // Key-Fingerprint
+            const rawKey = await crypto.subtle.exportKey("raw", chatKey);
+            const keyHash = btoa(String.fromCharCode(...new Uint8Array(rawKey))).substring(0, 10);
+            console.log("--- KEY FINGERPRINT: " + keyHash + " ---");
             
-            // 2. Start socket connection with JWT
+            // Start socket connection with JWT
             connectSocket(token, username);
         } else {
             alert("Registration successful! Please log in now.");
