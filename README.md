@@ -61,6 +61,10 @@ A simple real-time chat demonstrating End-to-End Encryption (E2EE).
 - Passwords are never stored in plain text; only bcrypt hashes are saved to users.json.
 - Authenticated requests are protected by JWT stored in the session.
 
+### Development & AI Disclosure
+
+This project was developed with the assistance of AI tools (Gemini & Claude) for boilerplate code generation, debugging, and documentation. Security-critical logic was reviewed to ensure functional integrity. The cryptographic functions were created according to my security specifications (AES-GCM, PBKDF2) and tested for functionality by me.
+
 ### License
 
 This project is licensed under the MIT License.
