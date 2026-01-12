@@ -1,20 +1,20 @@
-// --- Globale Variablen ---
+// --- Globale variables ---
 let socket;
-let chatKey; // Der lokale AES-Schlüssel für die Verschlüsselung
+let chatKey; // local AES-Key for encryption
 let isLoginMode = true;
 
 const PORT = process.env.PORT;
 
-// --- 1. KRYPTOGRAPHIE (Web Crypto API) ---
+// --- 1. CRYPTOGRAPHIE (Web Crypto API) ---
 
 /**
- * Erzeugt einen stabilen AES-Schlüssel aus dem Chat-Passwort.
+ * Generates a stable AES key from the chat password.
  */
 async function deriveKey(password) {
     const enc = new TextEncoder();
-    // Das "Salz" sollte in einer echten App pro User einzigartig sein. 
-    // Hier nutzen wir ein festes Salz für die Einfachheit.
-    const salt = enc.encode("mein-super-sicheres-festes-salz");
+    // The ‘salt’ should be unique per user in a real application
+    // Here I use a fixed salt is used for simplicity
+    const salt = enc.encode("super-secret-salt");
 
     const keyMaterial = await crypto.subtle.importKey(
         "raw", enc.encode(password),
@@ -35,8 +35,8 @@ async function deriveKey(password) {
 }
 
 /**
- * Verschlüsselt einen Text mit dem AES-Schlüssel.
- */
+* Encrypts text using the AES key. 
+*/
 async function encryptData(text, key) {
     const enc = new TextEncoder();
     const iv = crypto.getRandomValues(new Uint8Array(12)); // Initialisierungsvektor
@@ -47,14 +47,14 @@ async function encryptData(text, key) {
     );
 
     return {
-        // Wir konvertieren die Binärdaten in Base64-Strings für den Versand
+        // Convert binary data to Base64 strings for sending
         cipherText: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
         iv: btoa(String.fromCharCode(...iv))
     };
 }
 
 /**
- * Entschlüsselt die empfangenen Daten.
+ * Decrypts the received data.
  */
 async function decryptData(cipherObject, key) {
     const iv = new Uint8Array(atob(cipherObject.iv).split("").map(c => c.charCodeAt(0)));
@@ -69,20 +69,20 @@ async function decryptData(cipherObject, key) {
     return new TextDecoder().decode(decrypted);
 }
 
-// --- 2. AUTHENTIFIZIERUNG ---
+// --- 2. AUTHENTICATION ---
 
 /**
- * Wechselt zwischen Login und Registrierung im UI.
+ * Switch between login and registration in the UI.
  */
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
-    document.getElementById('auth-title').innerText = isLoginMode ? "Login" : "Registrieren";
-    document.getElementById('main-auth-btn').innerText = isLoginMode ? "Einloggen" : "Konto erstellen";
-    document.getElementById('toggle-btn').innerText = isLoginMode ? "Noch kein Konto? Registrieren" : "Zurück zum Login";
+    document.getElementById('auth-title').innerText = isLoginMode ? "Login" : "Register";
+    document.getElementById('main-auth-btn').innerText = isLoginMode ? "Login" : "Create Account";
+    document.getElementById('toggle-btn').innerText = isLoginMode ? "No account yet? Register" : "Back to login";
 }
 
 /**
- * Sendet Login- oder Registrierungsdaten an den Server.
+ * Sends login or registration data to the server.
  */
 async function handleAuth() {
     const username = document.getElementById('username').value;
@@ -90,7 +90,7 @@ async function handleAuth() {
     const chatPassword = document.getElementById('chat-password').value;
 
     if (!username || !password || !chatPassword) {
-        return alert("Bitte alle Felder ausfüllen!");
+        return alert("Please complete all fields!");
     }
 
     const endpoint = isLoginMode ? '/login' : '/register';
@@ -110,24 +110,24 @@ async function handleAuth() {
         if (isLoginMode) {
             const { token } = await response.json();
             
-            // 1. Chat-Key lokal aus dem Passwort ableiten
+            // 1. Derive chat key locally from password
             chatKey = await deriveKey(chatPassword);
             
-            // 2. Socket-Verbindung mit JWT starten
+            // 2. Start socket connection with JWT
             connectSocket(token, username);
         } else {
-            alert("Registrierung erfolgreich! Bitte logge dich jetzt ein.");
+            alert("Registration successful! Please log in now.");
             toggleAuthMode();
         }
     } catch (err) {
-        alert("Fehler: " + err.message);
+        alert("Error: " + err.message);
     }
 }
 
-// --- 3. SOCKET & CHAT LOGIK ---
+// --- 3. SOCKET & CHAT LOGIC ---
 
 /**
- * Baut die WebSocket-Verbindung auf.
+ * Establishes the WebSocket connection.
  */
 function connectSocket(token, myUsername) {
     socket = io(`http://localhost:${PORT}`, {
@@ -135,36 +135,36 @@ function connectSocket(token, myUsername) {
     });
 
     socket.on('connect', () => {
-        console.log("Verbunden als:", myUsername);
+        console.log("Connected as:", myUsername);
         document.getElementById('auth-container').style.display = 'none';
         document.getElementById('chat-container').style.display = 'flex';
     });
 
     socket.on('receive-message', async (data) => {
         try {
-            // Nachricht mit lokalem Schlüssel entschlüsseln
+            // Decrypt message with local key
             const decryptedText = await decryptData(data.content, chatKey);
             displayMessage(data.fromUserId, decryptedText, 'other');
         } catch (e) {
-            displayMessage("SYSTEM", "[Verschlüsselte Nachricht empfangen - Schlüssel inkorrekt]", 'other');
+            displayMessage("SYSTEM", "[Received encrypted message - key incorrect]", 'other');
         }
     });
 
     socket.on('connect_error', (err) => {
-        alert("Socket Fehler: " + err.message);
+        alert("Socket error: " + err.message);
     });
 }
 
 /**
- * Verschlüsselt und sendet eine Nachricht.
+ * Encrypts and sends a message.
  */
 async function sendMessage() {
     const targetId = document.getElementById('target-id').value;
     const text = document.getElementById('msg-input').value;
 
-    if (!text || !targetId) return alert("Ziel und Nachricht eingeben!");
+    if (!text || !targetId) return alert("Enter destination and message!");
 
-    // Nachricht lokal verschlüsseln
+    // Encrypt message locally
     const encrypted = await encryptData(text, chatKey);
 
     socket.emit('send-message', {
@@ -172,12 +172,12 @@ async function sendMessage() {
         encryptedContent: encrypted
     });
 
-    displayMessage('Ich', text, 'me');
+    displayMessage('ME', text, 'me');
     document.getElementById('msg-input').value = '';
 }
 
 /**
- * Zeigt Nachrichten im Chat-Fenster an.
+ *  Shows Messages in the chat window.
  */
 function displayMessage(sender, text, type) {
     const chatWindow = document.getElementById('chat-window');
@@ -185,5 +185,5 @@ function displayMessage(sender, text, type) {
     div.className = `msg ${type}`;
     div.innerHTML = `<strong>${sender}:</strong> ${text}`;
     chatWindow.appendChild(div);
-    chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-Scroll nach unten
+    chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-Scroll down
 }

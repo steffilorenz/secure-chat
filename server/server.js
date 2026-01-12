@@ -14,13 +14,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const SECRET = process.env.JWT_SECRET; // In .env ausgelagert
+const SECRET = process.env.JWT_SECRET;
 const PORT = process.env.PORT;
-let users = loadUsers(); // User aus Datei laden
+let users = loadUsers(); // load users from users.json
 
 app.use(express.json());
 
-// Serviert das Frontend direkt vom Server, um CORS zu vermeiden
+// Serve the frontend directly from the server to avoid CORS
 app.use(express.static(path.join(__dirname, '..','public')));
 
 
@@ -29,29 +29,29 @@ app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
 
     if (users.find(u => u.username === username)) 
-        return res.status(400).send("User existiert bereits");
+        return res.status(400).send("User already exist");
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = { username, password: hashedPassword };
 
-    // 1. In das globale Array pushen (RAM aktualisieren)
+    // 1. push new user into global array (update RAM)
     users.push(newUser);
 
-    // 2. In die Datei schreiben (Festplatte aktualisieren)
+    // 2. write user into the json (update)
     saveUsers(users);
 
-    res.status(201).send("Registrierung erfolgreich");
+    res.status(201).send("Registration successful");
 });    
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     const user = users.find(u => u.username === username);
-    
+
     if (user && await bcrypt.compare(password, user.password)) {
         const token = jwt.sign({ userId: username }, SECRET);
         return res.json({ token });
     }    
-    res.status(401).send("Fehler");
+    res.status(401).send("login error");
 });    
 
 
@@ -62,17 +62,17 @@ io.use((socket, next) => {
         const decoded = jwt.verify(token, SECRET);
         socket.userId = decoded.userId;
         next();
-    } catch (err) { next(new Error("Auth Fehler")); }
+    } catch (err) { next(new Error("Auth error")); }
 });
 
 io.on('connection', (socket) => {
     socket.join(socket.userId);
     socket.on('send-message', (data) => {
-        console.log("\n--- SERVER-LOG (ABGEFANGENES PAKET) ---");
-        console.log("Absender ID:", socket.userId);
-        console.log("Empfänger ID:", data.toUserId);
-        console.log("Verschlüsselter Inhalt (ct):", data.encryptedContent.ct);
-        console.log("Initialisierungsvektor (iv):", data.encryptedContent.iv);
+        console.log("\n--- SERVER-LOG (INTERCEPTED PAKET) ---");
+        console.log("Sender ID:", socket.userId);
+        console.log("Recipient ID:", data.toUserId);
+        console.log("Encrypted content (ct):", data.encryptedContent.ct); 
+        console.log("Initialisation vector (iv):", data.encryptedContent.iv); 
         console.log("---------------------------------------\n");
 
         io.to(data.toUserId).emit('receive-message', {
@@ -82,10 +82,10 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, () => console.log(`Server läuft auf http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Server is running: http://localhost:${PORT}`));
 
 
-// ---- Hilfsfunktionen ---
+// --- SUPPORT FUNCTIONS ---
 
 function loadUsers() {
     if (!fs.existsSync(USERS_FILE)) return [];
