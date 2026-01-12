@@ -76,7 +76,8 @@ async function decryptData(cipherObject, key) {
  */
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
-    document.getElementById('auth-area').innerText = isLoginMode ? "Login" : "Register";
+    
+    document.getElementById('title').innerText = isLoginMode ? "Login" : "Register";
     document.getElementById('login-btn').innerText = isLoginMode ? "Login" : "Create Account";
     document.getElementById('toggle-btn').innerText = isLoginMode ? "No account yet? Register" : "Back to login";
 }

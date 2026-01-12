@@ -36,7 +36,9 @@
             <input type="password" id="password" placeholder="Password">
             <input type="password" id="chat-password" placeholder="Chat-Key (E2EE)">
             <button onclick="handleAuth()" id="login-btn">Login</button>
-            <p onclick="toggleAuthMode()" style="cursor:pointer; font-size: 12px; color: #075e54; text-align: center;">Don't have an account yet? Register.</p>
+            <p id="toggle-btn" onclick="toggleAuthMode()" style="cursor:pointer; font-size: 12px; color: #075e54; text-align: center;">
+                Don't have an account yet? Register.
+            </p>
         </div>
 
         <div id="chat-area">
@@ -55,6 +57,6 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="main.js"></script>
-    
+
 </body>
 </html>
