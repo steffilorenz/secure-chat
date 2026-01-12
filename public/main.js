@@ -3,8 +3,6 @@ let socket;
 let chatKey; // local AES-Key for encryption
 let isLoginMode = true;
 
-const PORT = process.env.PORT;
-
 // --- 1. CRYPTOGRAPHIE (Web Crypto API) ---
 
 /**
@@ -30,7 +28,7 @@ async function deriveKey(password) {
         },
         keyMaterial,
         { name: "AES-GCM", length: 256 },
-        false, ["encrypt", "decrypt"]
+        true, ["encrypt", "decrypt"]
     );
 }
 
@@ -39,7 +37,7 @@ async function deriveKey(password) {
 */
 async function encryptData(text, key) {
     const enc = new TextEncoder();
-    const iv = crypto.getRandomValues(new Uint8Array(12)); // Initialisierungsvektor
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // initialisation vector
     const encrypted = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv: iv },
         key,
@@ -48,7 +46,9 @@ async function encryptData(text, key) {
 
     return {
         // Convert binary data to Base64 strings for sending
-        cipherText: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+        // ct: The encrypted content (ciphertext)
+        // iv: initialisation vector
+        ct: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
         iv: btoa(String.fromCharCode(...iv))
     };
 }
@@ -58,12 +58,12 @@ async function encryptData(text, key) {
  */
 async function decryptData(cipherObject, key) {
     const iv = new Uint8Array(atob(cipherObject.iv).split("").map(c => c.charCodeAt(0)));
-    const cipherText = new Uint8Array(atob(cipherObject.cipherText).split("").map(c => c.charCodeAt(0)));
+    const ct = new Uint8Array(atob(cipherObject.ct).split("").map(c => c.charCodeAt(0)));
 
     const decrypted = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: iv },
         key,
-        cipherText
+        ct
     );
 
     return new TextDecoder().decode(decrypted);
@@ -76,8 +76,8 @@ async function decryptData(cipherObject, key) {
  */
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
-    document.getElementById('auth-title').innerText = isLoginMode ? "Login" : "Register";
-    document.getElementById('main-auth-btn').innerText = isLoginMode ? "Login" : "Create Account";
+    document.getElementById('auth-area').innerText = isLoginMode ? "Login" : "Register";
+    document.getElementById('login-btn').innerText = isLoginMode ? "Login" : "Create Account";
     document.getElementById('toggle-btn').innerText = isLoginMode ? "No account yet? Register" : "Back to login";
 }
 
@@ -93,10 +93,10 @@ async function handleAuth() {
         return alert("Please complete all fields!");
     }
 
-    const endpoint = isLoginMode ? '/login' : '/register';
+    const endpoint = isLoginMode ? '/api/login' : '/api/register';
 
     try {
-        const response = await fetch(`http://localhost:${PORT}/${endpoint}`, {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
@@ -107,10 +107,10 @@ async function handleAuth() {
             throw new Error(errorText);
         }
 
-        if (isLoginMode) {
+        if (response.ok && isLoginMode) {
             const { token } = await response.json();
             
-            // 1. Derive chat key locally from password
+            // 1. generate chat key from password
             chatKey = await deriveKey(chatPassword);
             
             // 2. Start socket connection with JWT
@@ -124,29 +124,31 @@ async function handleAuth() {
     }
 }
 
+
 // --- 3. SOCKET & CHAT LOGIC ---
 
 /**
  * Establishes the WebSocket connection.
  */
 function connectSocket(token, myUsername) {
-    socket = io(`http://localhost:${PORT}`, {
-        auth: { token }
-    });
+    socket = io({ auth: { token } }); // Socket.io knows where the server is located       
 
     socket.on('connect', () => {
         console.log("Connected as:", myUsername);
-        document.getElementById('auth-container').style.display = 'none';
-        document.getElementById('chat-container').style.display = 'flex';
+        document.getElementById('auth-area').style.display = 'none';
+        document.getElementById('chat-area').style.display = 'flex';
     });
+
+
 
     socket.on('receive-message', async (data) => {
         try {
             // Decrypt message with local key
-            const decryptedText = await decryptData(data.content, chatKey);
-            displayMessage(data.fromUserId, decryptedText, 'other');
+            const decryptedText = await decryptData(data.encryptedContent, chatKey);
+            showMsg(data.fromUserId, decryptedText, 'other');
         } catch (e) {
-            displayMessage("SYSTEM", "[Received encrypted message - key incorrect]", 'other');
+            console.error("Decryption error:", e);
+            showMsg("SYSTEM", "[Received encrypted message - key incorrect]", 'other');
         }
     });
 
@@ -159,8 +161,11 @@ function connectSocket(token, myUsername) {
  * Encrypts and sends a message.
  */
 async function sendMessage() {
-    const targetId = document.getElementById('target-id').value;
-    const text = document.getElementById('msg-input').value;
+    const targetField = document.getElementById('target');
+    const msgField = document.getElementById('msg');
+
+    const targetId = targetField.value;
+    const text = msgField.value;
 
     if (!text || !targetId) return alert("Enter destination and message!");
 
@@ -172,18 +177,27 @@ async function sendMessage() {
         encryptedContent: encrypted
     });
 
-    displayMessage('ME', text, 'me');
-    document.getElementById('msg-input').value = '';
-}
+    showMsg('Me', text, 'me');
+
+    msgField.value = '';
+    msgField.focus();}
 
 /**
  *  Shows Messages in the chat window.
  */
-function displayMessage(sender, text, type) {
-    const chatWindow = document.getElementById('chat-window');
+function showMsg(sender, text, type) {
+    const chatWindow = document.getElementById('messages');
     const div = document.createElement('div');
     div.className = `msg ${type}`;
     div.innerHTML = `<strong>${sender}:</strong> ${text}`;
     chatWindow.appendChild(div);
     chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-Scroll down
+}
+
+/**
+ *  Shows Messages in the target chat window.
+ */
+function updateTargetDisplay() {
+    const val = document.getElementById('target').value;
+    document.getElementById('display-target').innerText = val || " ";
 }

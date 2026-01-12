@@ -32,20 +32,19 @@
     <div id="app">
         <div id="auth-area">
             <h2 id="title">Login</h2>
-            <input type="text" id="user" placeholder="Username">
-            <input type="password" id="pass" placeholder="Password">
-            <input type="password" id="chat-pass" placeholder="Chat-Key (E2EE)">
-            <button onclick="auth('login')" id="login-btn">Login</button>
-            <p onclick="toggleMode()" style="cursor:pointer; font-size: 12px; color: #075e54; text-align: center;">Don't have an account yet? Register.</p>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <input type="password" id="chat-password" placeholder="Chat-Key (E2EE)">
+            <button onclick="handleAuth()" id="login-btn">Login</button>
+            <p onclick="toggleAuthMode()" style="cursor:pointer; font-size: 12px; color: #075e54; text-align: center;">Don't have an account yet? Register.</p>
         </div>
 
         <div id="chat-area">
             <div id="current-chat-partner">Chat with: <span id="display-target"></span></div>
             <input type="text" id="target" placeholder="Enter recipient‘s username..." oninput="updateTargetDisplay()">
             
-            <div id="messages"></div>
-            
-            <form id="msg-form" onsubmit="event.preventDefault(); send();">
+        <div id="messages"></div>
+            <form id="msg-form" onsubmit="event.preventDefault(); sendMessage();">
                 <div class="input-group">
                     <input type="text" id="msg" placeholder="Write message..." style="flex: 1;" autocomplete="off">
                     <button type="submit">Send</button>
@@ -55,93 +54,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script>
-        let socket, chatKey, isLogin = true;
-
-        function toggleMode() {
-            isLogin = !isLogin;
-            document.getElementById('title').innerText = isLogin ? "Login" : "Register";
-            document.getElementById('login-btn').innerText = isLogin ? "Login" : "Register";
-        }
-
-        function updateTargetDisplay() {
-            const val = document.getElementById('target').value;
-            document.getElementById('display-target').innerText = val || " ";
-        }
-
-        async function deriveKey(pass) {
-            const enc = new TextEncoder();
-            const baseKey = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
-            return crypto.subtle.deriveKey({name: "PBKDF2", salt: enc.encode("fixed-salt"), iterations: 100000, 
-                hash: "SHA-256"}, baseKey, {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]);
-        }
-
-        async function auth() {
-            const u = document.getElementById('user').value;
-            const p = document.getElementById('pass').value;
-            const cp = document.getElementById('chat-pass').value;
-            const url = isLogin ? '/api/login' : '/api/register';
-
-            try {
-                const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, password:p})});
-                if (!res.ok) throw new Error("Server error");
-
-                if (isLogin) {
-                    const { token } = await res.json();
-                    chatKey = await deriveKey(cp);
-                    startSocket(token, u);
-                } else { 
-                    alert("Successfully registered! Please log in."); 
-                    toggleMode(); 
-                }
-            } catch(e) { alert(e.message); }
-        }
-
-        function startSocket(token, u) {
-            socket = io({ auth: { token } });
-            document.getElementById('auth-area').style.display = 'none';
-            document.getElementById('chat-area').style.display = 'flex';
-            document.getElementById('msg').focus(); // focus directly on text area
-
-            socket.on('receive-message', async (data) => {
-                try {
-                    const iv = new Uint8Array(atob(data.content.iv).split("").map(c => c.charCodeAt(0)));
-                    const ct = new Uint8Array(atob(data.content.ct).split("").map(c => c.charCodeAt(0)));
-                    const dec = await crypto.subtle.decrypt({name: "AES-GCM", iv}, chatKey, ct);
-                    showMsg(data.fromUserId, new TextDecoder().decode(dec), 'other');
-                } catch(e) { showMsg(data.fromUserId, "[Encrypted message - Key incorrect?]", 'other'); }
-            });
-        }
-
-        async function send() {
-            const t = document.getElementById('target').value;
-            const mField = document.getElementById('msg');
-            const m = mField.value;
-            
-            if (!t || !m) return;
-
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const enc = await crypto.subtle.encrypt({name: "AES-GCM", iv}, chatKey, new TextEncoder().encode(m));
-            
-            socket.emit('send-message', { toUserId: t, encryptedContent: {
-                ct: btoa(String.fromCharCode(...new Uint8Array(enc))),
-                iv: btoa(String.fromCharCode(...iv))
-            }});
-            
-            showMsg("Me", m, 'me');
-            
-            mField.value = ""; // clear
-            mField.focus();    // set back the focus
-        }
-
-        function showMsg(s, m, type) {
-            const d = document.createElement('div');
-            d.className = `msg ${type}`;
-            d.innerHTML = `<strong>${s}:</strong><br>${m}`;
-            const box = document.getElementById('messages');
-            box.appendChild(d);
-            box.scrollTop = box.scrollHeight; // auto-scroll down
-        }
-    </script>
+    <script src="main.js"></script>
+    
 </body>
 </html>

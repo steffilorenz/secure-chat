@@ -77,7 +77,7 @@ io.on('connection', (socket) => {
 
         io.to(data.toUserId).emit('receive-message', {
             fromUserId: socket.userId,
-            content: data.encryptedContent
+            encryptedContent: data.encryptedContent
         });
     });
 });
