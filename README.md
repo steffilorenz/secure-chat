@@ -14,7 +14,7 @@ A simple real-time chat demonstrating End-to-End Encryption (E2EE).
 1. Clone the repository:
 
    ```
-   git clone https://github.com/your-username/secure-chat.git
+   git clone https://github.com/steffilorenz/secure-chat.git
    cd secure-chat
    ```
 
@@ -37,7 +37,9 @@ A simple real-time chat demonstrating End-to-End Encryption (E2EE).
    npm start
    ```
 
-5. Access the App: Open http://localhost:3000 in your browser.
+5. Access the App: Open http://localhost:3000 in at least two browser windows to demonstrate the chat.
+
+6. In each window, register a user account and sign in using the same chat-key in both sessions, then start chatting.
 
 ### Core Features
 
@@ -61,9 +63,13 @@ A simple real-time chat demonstrating End-to-End Encryption (E2EE).
 - Passwords are never stored in plain text; only bcrypt hashes are saved to users.json.
 - Authenticated requests are protected by JWT stored in the session.
 
+##### Verification: Key Fingerprinting
+
+To ensure that both chat participants have derived the exact same cryptographic key without ever sending the key over the network, this application implements "Key Fingerprinting".
+
 ### Development & AI Disclosure
 
-This project was developed with the assistance of AI tools (Gemini & Claude) for boilerplate code generation, debugging, and documentation. Security-critical logic was reviewed to ensure functional integrity. The cryptographic functions were created according to my security specifications (AES-GCM, PBKDF2) and tested for functionality by me.
+The code was generated with the help of AI tools (Claude & Gemini) and customized according to my own specifications and requirements.
 
 ### License
 
