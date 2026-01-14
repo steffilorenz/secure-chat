@@ -1,4 +1,4 @@
-require('dotenv').config(); // Lädt die Variablen aus der .env Datei
+require('dotenv').config(); // Loads the variables from the .env file
 
 const express = require('express');
 const http = require('http');
@@ -24,7 +24,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..','public')));
 
 
-// --- AUTH ROUTEN ---
+// --- AUTH ROUTES ---
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
 

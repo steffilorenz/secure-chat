@@ -1,4 +1,4 @@
-// --- Globale variables ---
+// --- global variables ---
 let socket;
 let chatKey; // local AES-Key for encryption
 let isLoginMode = true;
@@ -11,7 +11,7 @@ let isLoginMode = true;
 async function deriveKey(password) {
     const enc = new TextEncoder();
     // The ‘salt’ should be unique per user in a real application
-    // Here I use a fixed salt is used for simplicity
+    // Here I use a fixed salt for simplicity
     const salt = enc.encode("super-secret-salt");
 
     const keyMaterial = await crypto.subtle.importKey(
@@ -82,6 +82,13 @@ function toggleAuthMode() {
     document.getElementById('toggle-btn').innerText = isLoginMode ? "No account yet? Register" : "Back to login";
 }
 
+async function hashPassword(pw) {
+    const msgUint8 = new TextEncoder().encode(pw);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Sends login or registration data to the server.
  */
@@ -96,11 +103,13 @@ async function handleAuth() {
 
     const endpoint = isLoginMode ? '/api/login' : '/api/register';
 
+    const hashedPassword = await hashPassword(password);
+
     try {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password: hashedPassword })
         });
 
         if (!response.ok) {
